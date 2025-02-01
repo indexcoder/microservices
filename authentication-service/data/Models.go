@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"golang.org/x/crypto/bcrypt"
 	"time"
 )
@@ -37,7 +38,7 @@ func (u *User) GetAll() ([]*User, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
-	query := `select id, email, first_name, last_name, active, created_at, updated_at from users order by last_name`
+	query := `select id, email, first_name, last_name, user_active, created_at, updated_at from users order by last_name`
 
 	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
@@ -63,7 +64,7 @@ func (u *User) GetByEmail(email string) (*User, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
-	query := `select id, email, first_name, last_name, password, active, created_at, updated_at from users where email = ?`
+	query := `select id, email, first_name, last_name, password, user_active, created_at, updated_at from users where email = $1`
 
 	var user User
 	row := db.QueryRowContext(ctx, query, email)
@@ -81,7 +82,7 @@ func (u *User) GetByID(id int) (*User, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
-	query := `select id, email, first_name, last_name, password, active, created_at, updated_at from users where id = ?`
+	query := `select id, email, first_name, last_name, password, user_active, created_at, updated_at from users where id = ?`
 
 	var user User
 	row := db.QueryRowContext(ctx, query, id)
@@ -96,7 +97,7 @@ func (u *User) GetByID(id int) (*User, error) {
 func (u *User) Update() error {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
-	query := `update users set email = $1, first_name = $2, last_name = $3, active = $4, updated_at = $5 where id = $6`
+	query := `update users set email = $1, first_name = $2, last_name = $3, user_active = $4, updated_at = $5 where id = $6`
 
 	_, err := db.ExecContext(ctx, query, u.Email, u.FirstName, u.LastName, u.Active, u.UpdatedAt, u.ID)
 
@@ -128,7 +129,7 @@ func (u *User) Insert(user User) (int, error) {
 		return 0, err
 	}
 	var newId int
-	query := `insert into users (email, first_nam, last_name, password, active, created_at, updated_at) values ($1, $2, $3, $4, $5, $6, $7) returning id`
+	query := `insert into users (email, first_nam, last_name, password, user_active, created_at, updated_at) values ($1, $2, $3, $4, $5, $6, $7) returning id`
 
 	err = db.QueryRowContext(ctx, query, user.Email, user.FirstName, user.LastName, hashedPassword, user.Active, user.CreatedAt, time.Now(), time.Now()).Scan(&newId)
 	if err != nil {
@@ -151,15 +152,15 @@ func (u *User) ResetPassword(password string) error {
 }
 
 func (u *User) PasswordMatches(plainText string) (bool, error) {
-
 	err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(plainText))
 	if err != nil {
-		// Если ошибка совпадает с bcrypt.ErrMismatchedHashAndPassword
-		if err == bcrypt.ErrMismatchedHashAndPassword {
-			return false, nil // Пароль неверный, но это не критическая ошибка
+		switch {
+		case errors.Is(err, bcrypt.ErrMismatchedHashAndPassword):
+			// invalid password
+			return false, nil
+		default:
+			return false, err
 		}
-		// Любая другая ошибка
-		return false, err
 	}
 	return true, nil
 }

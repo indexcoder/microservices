@@ -65,7 +65,7 @@ func openDB(dsn string) (*sql.DB, error) {
 func connectToDB() *sql.DB {
 	dsn := os.Getenv("DSN")
 	if dsn == "" {
-		dsn = "host=postgres port=5432 user=postgres password=password dbname=users sslmode=disable"
+		dsn = "host=postgres port=5439 user=postgres password=password dbname=users sslmode=disable"
 		log.Println("Используется стандартный DSN:", dsn)
 		log.Fatal("Переменная окружения DSN не задана")
 	}
